@@ -1,1 +1,1 @@
-# neural_ppp
+# Squared Neural Families
