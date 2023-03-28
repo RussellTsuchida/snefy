@@ -51,7 +51,8 @@ class ConditionalDensity(BaseDistribution):
 
             #  Check whether to accept or reject
             log_prob = -self.proposal_dist.log_prob(y).to(device) + \
-                self.log_prob(y.to(device), x) - np.log(M)
+                self.log_prob(y.to(device), x) - \
+                np.log(M)
             u = torch.rand(y.shape[0]).to(device)
             # Keep relevant samples 
             idx = (torch.log(u) < log_prob).nonzero()
@@ -69,8 +70,9 @@ class ConditionalDensity(BaseDistribution):
         Conforming to normalising flows API. Generate samples and compute
         their log probability.
         """
+        logp = self.log_prob(samples, x)
         samples = self.sample(num_samples, M, x)
-        return self.samples, self.log_prob(samples, x)
+        return self.samples, logp
 
     def log_prob(self, y, x):
         """
@@ -79,10 +81,30 @@ class ConditionalDensity(BaseDistribution):
         feat = self.feature_net(x).T
         log_num = torch.squeeze(self.squared_nn(y, extra_input=feat,
             log_scale=True))
-        log_den = torch.squeeze(\
-                self.squared_nn.integrate(extra_input=feat, log_scale=True))
-        return log_num - log_den
+        # Only update the partition function during training. 
+        # First evaluation after model.eval() requires manual call to update_partfun
+        if self.training:
+            self.update_partfun(x)
+        return log_num - self.log_part
 
+    def update_partfun(self, x):
+        # First evaluation after model.eval() requires manual call to update_partfun
+        feat = self.feature_net(x).T
+        self.log_part = torch.squeeze(\
+                self.squared_nn.integrate(extra_input=feat, log_scale=True))
+
+    """
+    def freeze_features(self, unfreeze=False, x=None):
+        self.frozen = not unfreeze
+        self.squared_nn.W.requires_grad = unfreeze
+        self.squared_nn.B.requires_grad = unfreeze
+        for param in self.squared_nn.base_measure.parameters():
+            param.requires_grad = unfreeze
+        
+        # Compute partition function for frozen conditioning input
+        feat = self.feature_net(x).T
+        self.squared_nn.integrate(extra_input=feat, log_scale=True)
+    """
 
 class Density(ConditionalDensity):
     """
@@ -96,7 +118,7 @@ class Density(ConditionalDensity):
         self.param = torch.nn.Parameter(\
             torch.from_numpy(np.asarray([[0.]])).float())
         self.param.requires_grad = False
-
+    
     def sample(self, num_samples=1, M=1000, x=None, num_batch_samples=None,
         keep_leftovers = False):
         return super().sample(num_samples, M, x, num_batch_samples,
@@ -108,6 +130,8 @@ class Density(ConditionalDensity):
     def log_prob(self, y, x=None):
         return super().log_prob(y, x=x)
 
+    def update_partfun(self, x=None):
+        return super().update_partfun(x=x)
 
 
 class AutoregressiveDensity(BaseDistribution):

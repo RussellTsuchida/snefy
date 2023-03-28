@@ -47,7 +47,7 @@ def cos_minus_ident_kernel(W1, W2, B1, B2, a=0.5):
 
     return cos_ker + cross1 - cross2 - cross3 + lin_ker
 
-def snake_kernel(W1, W2, B1, B2, a=0.5):
+def _snake_kernel(W1, W2, B1, B2, a=0.5):
     cosmident_ker = cos_minus_ident_kernel(W1, W2, B1, B2, a)
 
     sq_norm1 = torch.sum(W1**2, dim=1).reshape((-1, 1))
@@ -60,6 +60,38 @@ def snake_kernel(W1, W2, B1, B2, a=0.5):
     B2 = B2.T 
     B1 = B1.reshape((B1.shape[0], B1.shape[1], 1)) # (M, n, 1)
     B2 = B2.reshape((B2.shape[0], 1, B2.shape[1])) # (M, 1, n)
+
+    cross1 = B1 - 1/(2*a)*torch.cos(2*a*B1)*exp1
+    cross2 = B2 - 1/(2*a)*torch.cos(2*a*B2)*exp2
+    return cosmident_ker + 1/(4*a**2) + (cross1+cross2)/(2*a)
+
+def snake_kernel(W1, W2, B1, B2, a=0.5):
+    """
+    Implemented without calling other methods. Uglier code but faster.
+    """
+    #TODO: This could surely be refactored and still made fast
+    cos_ker = 1/(4*a**2)*cos_kernel(2*a*W1, 2*a*W2, 2*a*B1, 2*a*B2)
+
+    sq_norm1 = torch.sum(W1**2, dim=1).view(-1, 1)
+    sq_norm2 = torch.sum(W2**2, dim=1).view(-1, 1)
+
+    exp1 = torch.exp(-2*a**2*sq_norm1).view(1, -1,1)
+    exp2 = torch.exp(-2*a**2*sq_norm2).view(1, 1,-1)
+
+    B1 = B1.T # (M, n) where M is batch size and n is num neurons
+    B2 = B2.T 
+    B1 = B1.view(B1.shape[0], B1.shape[1], 1) # (M, n, 1)
+    B2 = B2.view(B2.shape[0], 1, B2.shape[1]) # (M, 1, n)
+    
+    B12 = B1 @ B2 # Pairwise product of elements of B1 and B2
+    W12 = W1 @ W2.T # Same for W
+    lin_ker = W12 + B12
+
+    cross1 = W12 *(exp1*torch.sin(2*a*B1) + torch.sin(2*a*B2) * exp2)
+    cross2 = B1 @ (torch.cos(2*a*B2) * exp2)/(2*a)
+    cross3 = (torch.cos(2*a*B1)*exp1) @ B2/(2*a)
+
+    cosmident_ker = cos_ker + cross1 - cross2 - cross3 + lin_ker
 
     cross1 = B1 - 1/(2*a)*torch.cos(2*a*B1)*exp1
     cross2 = B2 - 1/(2*a)*torch.cos(2*a*B2)*exp2
@@ -104,3 +136,21 @@ def arc_sine_kernel(W1, W2, B1, B2):
     arg = (2*prod12 / torch.sqrt(1 + 2*prod11))/torch.sqrt(1+2*prod22)
 
     return 2/np.pi * torch.arcsin(arg)
+
+def vmf_kernel(W1, W2, B1, B2):
+    assert W1.shape[1] == 3 # Currently only support data on sphere
+
+    sum_ = torch.cdist(torch.unsqueeze(W1, 0), -torch.unsqueeze(W2, 0)) 
+    
+    # Reshape so explicit batch dimension always present
+    B1 = B1.view((-1, B1.shape[-2], B1.shape[-1]))
+    B2 = B2.view((-1, B2.shape[-2], B2.shape[-1]))
+    #Pairwise sum of B1 and B2
+    b_sum = B1.unsqueeze(2) + B2.unsqueeze(1)
+    exp_fac = torch.squeeze(torch.exp(b_sum), dim=len(b_sum.shape)-1)
+    fac = (torch.exp(sum_) - torch.exp(-sum_))/sum_
+    fac[fac!=fac] = 1
+    return 2*np.pi*fac*exp_fac
+
+
+

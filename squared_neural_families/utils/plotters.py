@@ -15,6 +15,7 @@ def matplotlib_config():
     matplotlib.rcParams['legend.fontsize'] = 10
     matplotlib.rcParams['xtick.labelsize'] = 20
     matplotlib.rcParams['ytick.labelsize'] = 20
+    matplotlib.rcParams['pcolor.shading']='auto'
     matplotlib.rc('text', usetex=True)
     matplotlib.rcParams['text.latex.preamble']=r"\usepackage{amsmath}"
 

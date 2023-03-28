@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from . import kernels
+from normflows.distributions import GaussianMixture
 
 class SquaredNN(torch.nn.Module):
     """
@@ -29,6 +30,8 @@ class SquaredNN(torch.nn.Module):
         self.n = n
         self.a = 1 #TODO: this is the parameter for snake activaitons.
         self.dim = dim
+        self.measure = measure
+        self.preprocessing = preprocessing
 
         self._initialise_params(d, n)
         self._initialise_measure(measure)
@@ -41,7 +44,8 @@ class SquaredNN(torch.nn.Module):
         elif (activation == 'cosmident'):
             self.act = lambda x: x - torch.cos(x)
         elif (activation == 'snake'):
-            self.act = lambda x: x + torch.sin(self.a*x)**2/self.a
+            #self.act = lambda x: x + torch.sin(self.a*x)**2/self.a
+            self.act = lambda x: x + (1-torch.cos(2*self.a*x))/(2*self.a)
         elif (activation == 'sin'):
             self.act = torch.sin
         elif (activation == 'relu'):
@@ -50,13 +54,28 @@ class SquaredNN(torch.nn.Module):
         elif (activation == 'erf'):
             self.act = torch.erf
             self.B.requires_grad = False
+        elif (activation == 'exp'):
+            self.act = torch.exp
         else:
             raise Exception("Unexpected activation.")
 
     def _initialise_measure(self, measure):
         if (measure == 'gauss'):
+            #self.pdf = lambda x, log_scale: \
+            #        normpdf(x, std=self.s, log_scale=log_scale)
+            self.base_measure = GaussianMixture(8, self.d).float()
             self.pdf = lambda x, log_scale: \
-                    normpdf(x, log_scale=log_scale)
+                self.base_measure.log_prob(x) if log_scale\
+                else torch.exp(self.base_measure.log_prob(x))
+        elif (measure == 'uniformsphere'):
+            # Reciprocal of surface area of sphere
+            self.base_measure = None
+            self.pdf_ = lambda x, log_scale:\
+                -self.d/2 * np.log(2*np.pi) + \
+                torch.lgamma(torch.tensor(self.d/2)) if log_scale \
+                else torch.exp(torch.lgamma(torch.tensor(self.d/2)))/\
+                    (2*np.pi**(self.d/2))
+            self.pdf = lambda x, log_scale: self.pdf_(x, log_scale).to(x.device)
         else:
             raise Exception("Unexpected measure.")
 
@@ -69,6 +88,10 @@ class SquaredNN(torch.nn.Module):
         self.V = torch.nn.Parameter(torch.from_numpy(V).float())
         self.B = torch.nn.Parameter(torch.from_numpy(B).float())
         self.v0 = torch.nn.Parameter(torch.from_numpy(np.asarray([1.])).float())
+        # TODO: STD of Gaussian base measure
+        #self.s = torch.nn.Parameter(torch.from_numpy(np.asarray([1.])).float())
+        #if not ((self.measure == 'gauss') and (self.preprocessing == 'ident')):
+        #    self.s.requires_grad = False
 
     def _initialise_kernel(self, domain, measure, activation, preprocessing):
         if (domain == 'Rd') and (measure == 'gauss') and (activation == 'cos')\
@@ -91,15 +114,52 @@ class SquaredNN(torch.nn.Module):
                 and (preprocessing == 'ident'):
             name = 'arcsin'
             self.B.requires_grad = False
+        elif ((domain == 'Rd') and (measure == 'gauss') and (activation == 'exp')\
+            and (preprocessing == 'sphere')) or \
+            ((domain == 'sphere') and (measure == 'uniformsphere') and \
+            (activation == 'exp') and (preprocessing == 'ident')):
+            name = 'vmf'
         else:
             raise Exception("Unexpected integration parameters.")
         
         self.kernel = Kernel(name, self.a)
 
+    def _mathcal_T(self, A, m):
+        """
+        Return the result \mathcal{T} \Theta
+        """
+        #(num_mix_components x d x d)
+        Amat = torch.diag_embed(torch.squeeze(A))\
+            .view(A.shape[1],self.d,self.d)
+        
+        # (num_mix_components x n x 1)
+        m_ = torch.swapaxes(m, 0, 2)
+        m_ = torch.swapaxes(m_, 0, 1)
+
+        # (num_mix_components, n, d)
+        # (num_mix_components, n, 1)
+        return (self.W @ Amat, self.B + self.W @ m_)
+
     def integrate(self, extra_input=0, log_scale=False):
-        # TODO: This operation should be somehow cached for sampling
-        K = self.kernel(self.W, self.B, extra_input)
-        VKV = self.V.T @ K @ self.V+ self.v0**2
+        if self.measure == 'gauss':
+            t_param1, t_param2 = \
+                self._mathcal_T(torch.exp(self.base_measure.log_scale), 
+                self.base_measure.loc)
+        else:
+            t_param1 = self.W.view((1, self.W.shape[0], self.W.shape[1]))
+            t_param2 = self.B.view((1, self.B.shape[0], 1))
+
+        # Iterate over the number of mixture components. 
+        # Probably a better way to do this. #TODO
+        self.K = 0 
+        if self.measure == 'gauss':
+            weights = torch.softmax(self.base_measure.weight_scores, 1)
+        else:
+            weights = np.asarray([[1]])
+        for i in range(t_param1.shape[0]):
+            self.K = self.K + weights[0,i]*\
+                self.kernel(t_param1[i,:,:], t_param2[i,:,:], extra_input)
+        VKV = self.V.T @ self.K @ self.V+ self.v0**2
         if log_scale:
             ret = torch.log(VKV)
         else:
@@ -122,7 +182,8 @@ class SquaredNN(torch.nn.Module):
         if not (self.dim is None):
             if not (len(y.shape) == 1):
                 if not (y.shape[1] == 1):
-                    return y[:,self.dim].reshape((-1,1))
+                    #return y[:,self.dim].reshape((-1,1))
+                    return y[:,self.dim].view(-1,1)
         return y
 
 class Kernel(torch.nn.Module):
@@ -157,6 +218,9 @@ class Kernel(torch.nn.Module):
         elif name == 'arcsin':
             self.kernel = lambda W, B, extra_input: \
                 kernels.arc_sine_kernel(W, W, B+extra_input, B+extra_input)
+        elif name == 'vmf':
+            self.kernel = lambda W, B, extra_input: \
+                kernels.vmf_kernel(W, W, B+extra_input, B+extra_input)
         else:
             raise Exception("Unexpected kernel name.")
 
@@ -167,14 +231,17 @@ class Kernel(torch.nn.Module):
 """
 Miscellaneous functions used in the above implementations
 """
-def normpdf(val, log_scale = False):
+def normpdf(val, std=1, log_scale = False):
     if log_scale == True:
-        ret = torch.sum(\
-            np.log((1/np.sqrt(2*np.pi)))-0.5*val**2,
-            dim=1)
+        #ret = torch.sum(\
+        #    -0.5*torch.log(2*np.pi)-0.5*val**2/std**2\
+        #    -torch.log(std),dim=1)
+        ret = torch.sum(-0.5*val**2/std**2, dim=1)\
+            -0.5*np.log(2*np.pi)*val.shape[1]\
+            -torch.log(std)*val.shape[1]
     else:
-        ret = torch.prod((1/np.sqrt(2*np.pi))*torch.exp(-0.5*val**2), 
-            dim=1)
+        ret = torch.prod((1/torch.sqrt(2*np.pi*std**2))*\
+            torch.exp(-0.5*val**2/std**2), dim=1)
     return ret
 
 
