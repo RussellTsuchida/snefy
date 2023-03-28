@@ -1,6 +1,6 @@
 # Squared Neural Families
 
-If using Bracewell, I recommend first doing
+If using Bracewell, I recommend first cloning the repo, cding into directory and then doing
 
 `module load python`
 
