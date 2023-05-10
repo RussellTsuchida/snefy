@@ -129,7 +129,7 @@ class SquaredNN(torch.nn.Module):
         Return the result \mathcal{T} \Theta
         """
         #(num_mix_components x d x d)
-        Amat = torch.diag_embed(torch.squeeze(A))\
+        Amat = torch.diag_embed(torch.squeeze(A, dim=0))\
             .view(A.shape[1],self.d,self.d)
         
         # (num_mix_components x n x 1)
