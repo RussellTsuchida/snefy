@@ -255,7 +255,7 @@ def plot_results(model, p, target=True, a=False, save=False, prefix=''):
 p = [nf.distributions.TwoMoons(), nf.distributions.CircularGaussianMixture(11),
 nf.distributions.RingMixture()]
 name = ['moons', 'circle', 'rings']
-NUM_LAYERS = 16
+NUM_LAYERS = 3
 
 for i in range(len(p)):
     """

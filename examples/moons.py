@@ -32,7 +32,7 @@ for i in range(num_layers):
     flows.append(nf.flows.AffineCouplingBlock(param_map))
     # Swap dimensions
     flows.append(nf.flows.Permute(2, mode='swap'))
-
+"""
 # This models p(x1)
 squared_nn1 = SquaredNN('Rd', 'gauss', 'snake', 'ident', d=1,
     n = 100, dim=1)
@@ -47,6 +47,11 @@ p0given1 = ConditionalDensity(squared_nn2, feat_net)
 
 # Create the joint density
 snf_base = AutoregressiveDensity([p1, p0given1]).to(device)
+"""
+
+squared_nn = SquaredNN('Rd', 'gauss', 'snake', 'ident', d=2,
+    n=100)
+snf_base = Density(squared_nn)
 
 # Construct NVP and snf models
 nvp = nf.NormalizingFlow(base, flows)

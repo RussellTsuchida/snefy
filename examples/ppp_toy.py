@@ -7,11 +7,12 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from pathlib import Path
 import numpy as np
+import pickle
 
 matplotlib_config()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 Path('examples/outputs/ppp/').mkdir(parents = True, exist_ok = True)
-NUM_EPOCHS = 10
+NUM_EPOCHS = 1000
 
 ################################################## Example in \mathbb{R}^2 ##############
 # The SNF PPP model
