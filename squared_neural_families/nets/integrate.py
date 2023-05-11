@@ -24,7 +24,7 @@ class SquaredNN(torch.nn.Module):
             by the measure.
     """
     def __init__(self, domain, measure, activation, preprocessing, d=2, n=100,
-        dim = None):
+        dim = None, num_mix_components=8):
         super().__init__()
         self.d = d
         self.n = n
@@ -34,7 +34,7 @@ class SquaredNN(torch.nn.Module):
         self.preprocessing = preprocessing
 
         self._initialise_params(d, n)
-        self._initialise_measure(measure)
+        self._initialise_measure(measure,num_mix_components)
         self._initialise_activation(activation)
         self._initialise_kernel(domain, measure, activation, preprocessing)
 
@@ -59,11 +59,11 @@ class SquaredNN(torch.nn.Module):
         else:
             raise Exception("Unexpected activation.")
 
-    def _initialise_measure(self, measure):
+    def _initialise_measure(self, measure, num_mix_components):
         if (measure == 'gauss'):
             #self.pdf = lambda x, log_scale: \
             #        normpdf(x, std=self.s, log_scale=log_scale)
-            self.base_measure = GaussianMixture(8, self.d).float()
+            self.base_measure = GaussianMixture(num_mix_components, self.d).float()
             self.pdf = lambda x, log_scale: \
                 self.base_measure.log_prob(x) if log_scale\
                 else torch.exp(self.base_measure.log_prob(x))
