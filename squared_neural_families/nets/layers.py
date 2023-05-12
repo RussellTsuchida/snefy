@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 class Mask(torch.nn.Module):
     """
@@ -30,19 +31,27 @@ class Mlp(torch.nn.Module):
     def __init__(self, layer_sizes, mask_idx = None):
         super().__init__()
 
+        def weights_init(m):
+            torch.nn.init.normal_(m.weight, mean=0.0, 
+                std=np.sqrt(2/m.weight.shape[1]))
+
         modules = []
         if not (mask_idx is None):
             modules.append(Mask(mask_idx))
         for i in range(1, len(layer_sizes)):
             in_size = layer_sizes[i-1]
             out_size = layer_sizes[i]
-            modules.append(torch.nn.Linear(in_size, out_size))
+            lin = torch.nn.Linear(in_size, out_size)
+            weights_init(lin)
+            modules.append(lin)
             if (i == (len(layer_sizes) - 1)):
+                #modules.append(torch.nn.BatchNorm1d(out_size))
                 pass
             else:
                 modules.append(torch.nn.BatchNorm1d(out_size))
                 modules.append(torch.nn.ReLU())
-
+            #modules.append(torch.nn.BatchNorm1d(out_size))
+            #modules.append(torch.nn.ReLU())
         self.net = torch.nn.Sequential(*modules)
 
         

@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torch import linalg as LA
 from . import kernels
 from normflows.distributions import GaussianMixture
 
@@ -16,6 +17,10 @@ class SquaredNN(torch.nn.Module):
         n (int): Number of parameters in V
         dim (None or int): If not None, only model this index of the input.
             If not None, then d must be 1
+        num_mix_components (int): Number of mixture components if using a
+            Gaussian base measure.
+        m (int) The number of rows in V, i.e. the width of the readout
+            layer.
     Methods:
         integrate - Integrate the squared neural network against the measure.
             Optionally takes an extra_input, which could be the output of
@@ -24,7 +29,7 @@ class SquaredNN(torch.nn.Module):
             by the measure.
     """
     def __init__(self, domain, measure, activation, preprocessing, d=2, n=100,
-        dim = None, num_mix_components=8):
+        dim = None, num_mix_components=8, m=1):
         super().__init__()
         self.d = d
         self.n = n
@@ -33,7 +38,7 @@ class SquaredNN(torch.nn.Module):
         self.measure = measure
         self.preprocessing = preprocessing
 
-        self._initialise_params(d, n)
+        self._initialise_params(d, n, m)
         self._initialise_measure(measure,num_mix_components)
         self._initialise_activation(activation)
         self._initialise_kernel(domain, measure, activation, preprocessing)
@@ -79,9 +84,9 @@ class SquaredNN(torch.nn.Module):
         else:
             raise Exception("Unexpected measure.")
 
-    def _initialise_params(self, d, n):
+    def _initialise_params(self, d, n, m):
         W = np.random.normal(0, 1, (n, d))*2
-        V = np.random.normal(0, 1, (n, 1))*np.sqrt(1/n)
+        V = np.random.normal(0, 1, (m, n))*np.sqrt(1/(n*m))
         B = np.zeros((n, 1))
 
         self.W = torch.nn.Parameter(torch.from_numpy(W).float())
@@ -159,7 +164,13 @@ class SquaredNN(torch.nn.Module):
         for i in range(t_param1.shape[0]):
             self.K = self.K + weights[0,i]*\
                 self.kernel(t_param1[i,:,:], t_param2[i,:,:], extra_input)
-        VKV = self.V.T @ self.K @ self.V+ self.v0**2
+        #VKV = self.V.T @ self.K @ self.V+ self.v0**2 ## <- m=1 case transpose
+        #torch.vmap vectorises the operation. So we can do a batch trace on
+        # (B, m, m) for B traces of mxm matrices
+        #VKV = torch.vmap(torch.trace)(self.V @ self.K @ self.V.T)
+        # Not available until very recent so we do something else instead
+        VKV = (self.V @ self.K @ self.V.T).diagonal(offset=0, dim1=-1, 
+            dim2=-2).sum(-1).view((-1, 1, 1)) + self.v0**2
         if log_scale:
             ret = torch.log(VKV)
         else:
@@ -169,8 +180,13 @@ class SquaredNN(torch.nn.Module):
 
     def forward(self, y, extra_input=0, log_scale=False):
         y = self._mask(y)
-        squared_net = (self.V.T @ self.act(self.W @ y.T + self.B\
-            + extra_input))**2+ self.v0**2
+        # m=1 case transpose
+        #squared_net = (self.V.T @ self.act(self.W @ y.T + self.B\
+        #    + extra_input))**2+ self.v0**2
+        net_out = (self.V @ self.act(self.W @ y.T + self.B\
+            + extra_input)).T
+        squared_net = torch.norm(net_out, dim=1)**2 + self.v0**2
+        squared_net = squared_net.view((1, -1))
         if log_scale:
             logpdf = self.pdf(y, log_scale)
             return torch.log(squared_net) + logpdf

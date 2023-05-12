@@ -76,6 +76,7 @@ Cartopy==0.19.0.post1
 catalogue==2.0.6
 catboost==1.1.1
 cbor==1.0.0
+cdetools @ file:///scratch2/tsu007/cde_test/cdetools/python
 cdt==0.5.23
 celery==3.1.26.post2
 celery-with-redis==3.0
@@ -139,13 +140,14 @@ datrie==0.8.2
 deap==1.3.1
 debugpy==1.4.3
 decorator==4.4.2
-deepspeed==0.5.2
+deepspeed==0.8.3
 defusedxml==0.7.1
 delu==0.0.13
+Deprecated==1.2.13
 deprecation==2.1.0
 DerApproximator==0.5201
 dexml==0.5.1
-dgl==0.9.0
+dgl==0.9.1
 dicom==0.9.9.post1
 diffusers==0.2.4
 dill==0.3.4
@@ -191,6 +193,7 @@ Flask-SocketIO==5.0.1
 Flask-SQLAlchemy==2.5.1
 Flask-WTF==0.14.3
 flatbuffers==1.12
+flexcode @ file:///scratch2/tsu007/cde_test/FlexCode
 fonttools==4.29.1
 fqdn==1.5.1
 freetype-py==2.2.0
@@ -241,6 +244,7 @@ h5py==3.2.1
 hashids==1.3.1
 hdmedians==0.14.2
 HeapDict==1.0.1
+hjson==3.1.0
 holoviews==1.14.7
 hsluv==5.0.2
 html5lib==1.1
@@ -249,14 +253,16 @@ httpcore==0.15.0
 httplib2==0.19.1
 httpstan==4.4.2
 httpx==0.23.0
-huggingface-hub==0.8.1
+huggingface-hub==0.4.0
 humanfriendly==10.0
 hupper==1.10.3
 husl==4.0.3
+hydra-core==1.3.2
 hyperlink==21.0.0
 hyperopt==0.2.7
 hypothesis==6.14.5
 icalendar==4.0.7
+icecream==2.1.3
 identify==2.4.4
 idna==2.10
 ijson==3.1.4
@@ -304,6 +310,7 @@ json5==0.9.11
 jsonlines==2.0.0
 jsonpickle==1.5.2
 jsonpointer==2.3
+jsonref==1.1.0
 jsonschema==4.17.3
 jupyter-contrib-core==0.3.3
 jupyter-contrib-nbextensions==0.5.1
@@ -339,7 +346,7 @@ lbry-rocksdb==0.8.2
 leveldb==0.201
 libclang==13.0.0
 libmagic==1.0
-lightgbm==3.2.1.99
+lightgbm==3.2.1
 linecache2==1.0.0
 lineedit==0.1.6
 linkify-it-py==1.0.3
@@ -402,6 +409,7 @@ networkx==2.6.2
 nibabel==3.2.1
 ninja==1.10.2
 nltk==3.6.7
+nnkcde @ file:///scratch2/tsu007/cde_test/NNKCDE/python
 nodeenv==1.6.0
 nolearn==0.6.1
 normflows==1.6.1
@@ -464,6 +472,7 @@ pbkdf2==1.3
 pbr==5.5.1
 pedigree==1.1.0
 pexpect==4.8.0
+phiflow @ file:///scratch1/hli001/installs/phiflow/PhiFlow-2.3.3/dist/phiflow-2.3.3-py3-none-any.whl
 phik==0.12.0
 phip-stat==0.5.1
 pickleshare==0.7.5
@@ -516,6 +525,7 @@ pybedtools==0.8.2
 pyBigWig==0.3.18
 pybind11==2.6.2
 pycairo==1.20.0
+pycalib @ file:///scratch1/hli001/installs/pycalib/PyCalib/dist/pycalib-0.1.0.dev1-py3-none-any.whl
 pycocotools==2.0.2
 pycodestyle==2.9.1
 pycosat==0.6.3
@@ -540,6 +550,7 @@ pyglet==1.5.21
 Pygments==2.8.1
 PyGObject==3.40.1
 pygraphviz==1.10
+PyJWT==2.6.0
 pykdtree==1.3.4
 pykwalify==1.8.0
 pylama==8.4.1
@@ -657,8 +668,9 @@ scikit-fuzzy==0.4.2
 scikit-image==0.18.1
 scikit-learn==0.24.1
 scikit-plot==0.3.7
-scipy==1.6.2
+scipy==1.10.1
 sdeint==0.3.0
+se3-transformer @ file:///scratch1/hli001/installs/nvidia/DeepLearningExamples/DGLPyTorch/DrugDiscovery/SE3Transformer/dist/se3_transformer-1.2.0-py3-none-any.whl
 seaborn==0.11.2
 semver==2.13.0
 Send2Trash==1.8.0
@@ -674,6 +686,7 @@ SimpleITK==2.1.1
 simplejson==3.17.6
 sip==6.0.3
 six==1.16.0
+sklearn==0.0.post5
 sklearn-pandas==2.1.0
 sklearn2pmml==0.71.0
 skrebate==0.62
@@ -716,6 +729,7 @@ stsci.distutils==0.3.7
 submitit==1.4.1
 subprocess32==3.5.4
 svgwrite==1.4.1
+swagger-spec-validator==3.0.3
 symengine==0.8.1
 sympy==1.8
 tabulate==0.8.9
@@ -749,7 +763,8 @@ tomlkit==0.11.6
 toolshed==0.4.6
 toolz==0.11.1
 toposort==1.6
-torch==1.8.1
+torch==1.8.0a0+56b43f4
+torchaudio==0.9.1
 torchmetrics==0.7.3
 torchsummary==1.5.1
 tornado==6.2
@@ -805,6 +820,7 @@ WebOb==1.8.7
 websocket-client==1.2.1
 weightwatcher==0.6.4
 Werkzeug==1.0.1
+wget==3.2
 widgetsnbextension==3.5.1
 wimpy==0.6
 wordcloud==1.8.1
