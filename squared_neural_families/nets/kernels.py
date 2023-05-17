@@ -142,14 +142,15 @@ def vmf_kernel(W1, W2, B1, B2):
 
     sum_ = torch.cdist(torch.unsqueeze(W1, 0), -torch.unsqueeze(W2, 0)) 
     
-    # Reshape so explicit batch dimension always present
-    B1 = B1.view((-1, B1.shape[-2], B1.shape[-1]))
-    B2 = B2.view((-1, B2.shape[-2], B2.shape[-1]))
-    #Pairwise sum of B1 and B2
-    b_sum = B1.unsqueeze(2) + B2.unsqueeze(1)
+    b1 = torch.unsqueeze(B1.T, 2)
+    b2 = torch.unsqueeze(B2.T, 2)
+
+    b_sum = torch.cdist(b1, -b2, p=1)
+
     exp_fac = torch.squeeze(torch.exp(b_sum), dim=len(b_sum.shape)-1)
     fac = (torch.exp(sum_) - torch.exp(-sum_))/sum_
-    fac[fac!=fac] = 1
+    fac[fac!=fac] = 2
+
     return 2*np.pi*fac*exp_fac
 
 

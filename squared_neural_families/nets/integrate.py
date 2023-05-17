@@ -29,7 +29,7 @@ class SquaredNN(torch.nn.Module):
             by the measure.
     """
     def __init__(self, domain, measure, activation, preprocessing, d=2, n=100,
-        dim = None, num_mix_components=8, m=1):
+        dim = None, num_mix_components=8, m=1, diagonal_V = False):
         super().__init__()
         self.d = d
         self.n = n
@@ -38,7 +38,7 @@ class SquaredNN(torch.nn.Module):
         self.measure = measure
         self.preprocessing = preprocessing
 
-        self._initialise_params(d, n, m)
+        self._initialise_params(d, n, m, diagonal_V)
         self._initialise_measure(measure,num_mix_components)
         self._initialise_activation(activation)
         self._initialise_kernel(domain, measure, activation, preprocessing)
@@ -61,6 +61,7 @@ class SquaredNN(torch.nn.Module):
             self.B.requires_grad = False
         elif (activation == 'exp'):
             self.act = torch.exp
+            self.B.requires_grad = False # B may be folded into V for exp fam
         else:
             raise Exception("Unexpected activation.")
 
@@ -75,6 +76,7 @@ class SquaredNN(torch.nn.Module):
         elif (measure == 'uniformsphere'):
             # Reciprocal of surface area of sphere
             self.base_measure = None
+            # This doesn't affect the fit anyway
             self.pdf_ = lambda x, log_scale:\
                 -self.d/2 * np.log(2*np.pi) + \
                 torch.lgamma(torch.tensor(self.d/2)) if log_scale \
@@ -84,13 +86,18 @@ class SquaredNN(torch.nn.Module):
         else:
             raise Exception("Unexpected measure.")
 
-    def _initialise_params(self, d, n, m):
+    def _initialise_params(self, d, n, m, diagonal_V):
         W = np.random.normal(0, 1, (n, d))*2
         V = np.random.normal(0, 1, (m, n))*np.sqrt(1/(n*m))
         B = np.zeros((n, 1))
 
         self.W = torch.nn.Parameter(torch.from_numpy(W).float())
-        self.V = torch.nn.Parameter(torch.from_numpy(V).float())
+        if diagonal_V:
+            assert (n == m)
+            self.vdiag = torch.nn.Parameter(torch.ones((n)).float())
+            self.V = torch.diag(self.vdiag)
+        else:
+            self.V = torch.nn.Parameter(torch.from_numpy(V).float())
         self.B = torch.nn.Parameter(torch.from_numpy(B).float())
         self.v0 = torch.nn.Parameter(torch.from_numpy(np.asarray([1.])).float())
         # TODO: STD of Gaussian base measure
