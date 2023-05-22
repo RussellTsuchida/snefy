@@ -76,9 +76,9 @@ class SquaredNN(torch.nn.Module):
         elif (measure == 'uniformsphere'):
             # Reciprocal of surface area of sphere
             self.base_measure = None
-            # This doesn't affect the fit anyway
+            # This doesn't affect the fit anyway. Affects units of log likelihood
             self.pdf_ = lambda x, log_scale:\
-                -self.d/2 * np.log(2*np.pi) + \
+                -self.d/2 * np.log(np.pi) - np.log(2) + \
                 torch.lgamma(torch.tensor(self.d/2)) if log_scale \
                 else torch.exp(torch.lgamma(torch.tensor(self.d/2)))/\
                     (2*np.pi**(self.d/2))

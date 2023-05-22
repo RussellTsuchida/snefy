@@ -151,7 +151,4 @@ def vmf_kernel(W1, W2, B1, B2):
     fac = (torch.exp(sum_) - torch.exp(-sum_))/sum_
     fac[fac!=fac] = 2
 
-    return 2*np.pi*fac*exp_fac
-
-
-
+    return fac*exp_fac/2
