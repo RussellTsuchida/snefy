@@ -6,6 +6,24 @@ Clone the repo, CD into the downloaded directory, and then install the package:
 `python -m  pip install -r requirements.txt`
 `python -m pip install .`
 
+
+<table>
+<tr>
+<td>
+
+A $\texttt{SNEFY}_{\mathbb{S}^2, \text{Id}, \exp, U(\mathbb{S}^2)}$ density model training for the first $1000$ epochs  (log scale). Here the subscript $\mathbb{S}^2$ (the sphere) denotes the support, $\text{Id}$ denotes the identity sufficient statistic, $\exp$ denotes the exponential activation function, and $U(\mathbb{S}^2)$ means the uniform distribution on the sphere. This example comes from `examples/galaxy.py`.
+
+</td>
+<td>
+
+![animation](https://github.com/RussellTsuchida/snefy/assets/28694114/907cba96-4809-4bc8-9aa3-c493c9bea996)
+
+</td>
+</tr>
+</table>
+
+
+
 ## Usage
 The model is easily instantiated in two steps:
 1. Define a squaredNN using the `squared_neural_families.nets.integrate.SquaredNN` class
