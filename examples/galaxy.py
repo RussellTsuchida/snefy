@@ -31,12 +31,15 @@ def plot_data(ax, fname):
     ax.set_yticks([])
     ax.set_zticks([])
     ax.set_axis_off()
+
     plt.tight_layout()
-    plt.savefig('not_rotated/' + fname, bbox_inches='tight')
+    plt.savefig('not_rotated/' + fname, bbox_inches='tight', transparent=True,
+    pad_inches = 0)
 
     ax.view_init(270, 0)
     plt.tight_layout()
-    plt.savefig('rotated/' + fname, bbox_inches='tight')
+    plt.savefig('rotated/' + fname, bbox_inches='tight', transparent=True,
+    pad_inches = 0)
     plt.close()
 
 data = np.hstack((x.reshape((-1,1)), y.reshape((-1,1)), z.reshape((-1,1))))
@@ -89,7 +92,8 @@ def plot_density(xyz, prefix=0):
 ##################################################### Train model
 snf.train()
 optimizer = torch.optim.Adam(snf.parameters())
-for epoch in range(20000):
+#for epoch in range(20000):
+for epoch in range(2000):
     #if epoch > 10:
     #    squared_nn.W.requires_grad=False
     optimizer.zero_grad()
@@ -97,10 +101,11 @@ for epoch in range(20000):
     loss.backward()
     optimizer.step()
 
-    if (epoch % 1000) == 0:
-        loss = -1*torch.mean(snf.log_prob(data_test))
+    #if (epoch % 1000) == 0:
+    if (epoch % 5) == 0:
+        #loss = -1*torch.mean(snf.log_prob(data_test))
         plot_density(xyz, epoch)
-        print(epoch)
-        print(loss.item())
+        #print(epoch)
+        #print(loss.item())
 
 print(str(loss.item()) + ',' + str(time.time() - t0))
