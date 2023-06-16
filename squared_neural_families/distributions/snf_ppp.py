@@ -4,10 +4,10 @@ import math
 import numpy as np
 
 class PoissonPointProcess(torch.nn.Module):
-    def __init__(self, squared_nn):
+    def __init__(self, squared_nn, alpha=1):
         super().__init__()
         self.squared_nn = squared_nn # This is the intensity function of the PPP
-
+        self.alpha = alpha
 
     def log_prob(self, y):
         """
@@ -18,14 +18,15 @@ class PoissonPointProcess(torch.nn.Module):
         NOTE: RETURN SIZE IS SCALAR, NOT (n, 1) AS IT WOULD BE FOR DENSITY
         ESTIMATION! 
 
-        up to log n! term
+        up to log n! term and log alpha terms
 
         """
         if self.training:
             self.update_iif()
        
         #return (self.squared_nn(y, log_scale=True) - self.log_iif).reshape((-1,1))
-        return torch.sum(self.squared_nn(y, log_scale=True)) - self.log_iif 
+        return torch.sum(self.squared_nn(y, log_scale=True)) - \
+            self.alpha*self.log_iif 
 
 
 
