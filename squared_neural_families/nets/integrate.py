@@ -131,6 +131,10 @@ class SquaredNN(torch.nn.Module):
             ((domain == 'sphere') and (measure == 'uniformsphere') and \
             (activation == 'exp') and (preprocessing == 'ident')):
             name = 'vmf'
+        elif (domain == 'sphere') and (measure == 'uniformsphere') and \
+            (activation == 'relu') and (preprocessing == 'ident'):
+            name = 'arccossphere'
+            self.B.requires_grad = False
         else:
             raise Exception("Unexpected integration parameters.")
         
@@ -238,6 +242,10 @@ class Kernel(torch.nn.Module):
         elif name == 'arccos':
             self.kernel = lambda W, B, extra_input: \
                 kernels.arc_cosine_kernel(W, W, B+extra_input, B+extra_input)
+        elif name == 'arccossphere':
+            self.kernel = lambda W, B, extra_input: \
+                kernels.arc_cosine_kernel_sphere\
+                (W, W, B+extra_input, B+extra_input)
         elif name == 'arcsin':
             self.kernel = lambda W, B, extra_input: \
                 kernels.arc_sine_kernel(W, W, B+extra_input, B+extra_input)
