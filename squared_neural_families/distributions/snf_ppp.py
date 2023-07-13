@@ -26,13 +26,13 @@ class PoissonPointProcess(torch.nn.Module):
         # Careful to appropriately handle ratio of batch size to realisation size
         M = y.shape[0]
         return torch.sum(self.squared_nn(y, log_scale=True))*N/M - \
-            self.alpha*self.log_iif - math.lgamma(N) + N*np.log(self.alpha)
+            self.alpha*self.iif - math.lgamma(N) + N*np.log(self.alpha)
 
     def update_iif(self):
         """
         Update calculation of the integrated intensity function
         """
-        self.log_iif = self.squared_nn.integrate(log_scale=True)
+        self.iif = self.squared_nn.integrate(log_scale=False)
 
     def integrate_over_A(self, samples):
         """
