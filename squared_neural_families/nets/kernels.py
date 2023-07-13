@@ -112,7 +112,6 @@ def sin_kernel(W1, W2, B1, B2):
             torch.exp(-0.5*sum_**2)*torch.cos(sumb))
     return ret
 
-
 def arc_cosine_kernel(W1, W2, B1, B2):
     prod12 = W1 @ W2.T
     prod11 = torch.sum(W1**2, dim=1).reshape((-1,1))
@@ -130,6 +129,7 @@ def arc_cosine_kernel(W1, W2, B1, B2):
 
 def arc_cosine_kernel_sphere(W1, W2, B1, B2):
     # Integrate over uniform distribution on sphere instead of Gaussian
+    assert W1.shape[1] == 3
     moment = 3
     return arc_cosine_kernel(W1, W2, B1, B2)/moment
 

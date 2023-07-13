@@ -9,27 +9,24 @@ class PoissonPointProcess(torch.nn.Module):
         self.squared_nn = squared_nn # This is the intensity function of the PPP
         self.alpha = alpha
 
-    def log_prob(self, y):
+    def log_prob(self, y, N):
         """
         log probability of observations y
 
-        y is (n, d) where n is the number of points and d is the dimension
+        y is (M, d) where M is the number of BATCH points and d is the dimension
 
-        NOTE: RETURN SIZE IS SCALAR, NOT (n, 1) AS IT WOULD BE FOR DENSITY
+        Note that M <= N, where N is the number of events in the realisation.
+
+        NOTE: RETURN SIZE IS SCALAR, NOT (M, 1) AS IT WOULD BE FOR DENSITY
         ESTIMATION! 
-
-        up to log n! term and log alpha terms
-
         """
         if self.training:
             self.update_iif()
-       
-        #return (self.squared_nn(y, log_scale=True) - self.log_iif).reshape((-1,1))
-        return torch.sum(self.squared_nn(y, log_scale=True)) - \
-            self.alpha*self.log_iif 
-
-
-
+        
+        # Careful to appropriately handle ratio of batch size to realisation size
+        M = y.shape[0]
+        return torch.sum(self.squared_nn(y, log_scale=True))*N/M - \
+            self.alpha*self.log_iif - math.lgamma(N) + N*np.log(self.alpha)
 
     def update_iif(self):
         """
@@ -37,4 +34,14 @@ class PoissonPointProcess(torch.nn.Module):
         """
         self.log_iif = self.squared_nn.integrate(log_scale=True)
 
-
+    def integrate_over_A(self, samples):
+        """
+        We assume that samples is (N, d), where N is the number of samples and
+        d is the dimension. Each row is a sample from the base measure \mu, 
+        followed by a filtering process which removes samples that do not
+        belong to A.
+        The integrated intensity function is just the expected value of the
+        intensity function with respect to \mu.
+        """
+        lambda_eval = self.alpha*self.squared_nn(samples, log_scale=False)
+        return torch.mean(lambda_eval)
