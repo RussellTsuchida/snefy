@@ -1,5 +1,7 @@
 # Squared Neural Families (SNEFY)
 
+PyTorch implementation of [squared neural families](https://arxiv.org/abs/2305.13552).
+
 ## Installation
 Clone the repo, CD into the downloaded directory, and then install the package:
 ```
