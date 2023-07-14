@@ -182,7 +182,7 @@ class SquaredNN(torch.nn.Module):
         # Not available until very recent so we do something else instead
         #VKV = (self.V @ self.K @ self.V.T).diagonal(offset=0, dim1=-1, 
         #    dim2=-2).sum(-1).view((-1, 1, 1)) + self.v0**2
-        VKV = torch.sum(self.K * (self.V.T @ self.V)) + self.v0**2
+        VKV = torch.sum(self.K * (self.V.T @ self.V), dim=[1,2]) + self.v0**2
         if log_scale:
             ret = torch.log(VKV)
         else:
@@ -192,13 +192,22 @@ class SquaredNN(torch.nn.Module):
 
     def forward(self, y, extra_input=0, log_scale=False):
         y = self._mask(y)
-        # m=1 case transpose
-        #squared_net = (self.V.T @ self.act(self.W @ y.T + self.B\
-        #    + extra_input))**2+ self.v0**2
+        """
         net_out = (self.V @ self.act(self.W @ y.T + self.B\
             + extra_input)).T
         squared_net = torch.norm(net_out, dim=1)**2 + self.v0**2
         squared_net = squared_net.view((1, -1))
+        """
+        # If M is batch size, below is shape M x n
+        feat = self.act(self.W @ y.T + self.B + extra_input).T 
+
+        # Batch matrix multiply of features gives shape M x n x n
+        feat = feat.unsqueeze(2)
+        Ktilde = torch.bmm(feat, torch.swapaxes(feat, 1, 2))
+
+        squared_net = torch.sum(Ktilde*(self.V.T@self.V), dim=[1,2]) + \
+            self.v0**2
+
         if log_scale:
             logpdf = self.pdf(y, log_scale)
             return torch.log(squared_net) + logpdf
