@@ -26,7 +26,7 @@ class PoissonPointProcess(torch.nn.Module):
         # Careful to appropriately handle ratio of batch size to realisation size
         M = y.shape[0]
         return torch.sum(self.squared_nn(y, log_scale=True))*N/M - \
-            self.alpha*self.iif - math.lgamma(N) + N*np.log(self.alpha)
+            self.alpha*self.iif - math.lgamma(N+1) + N*np.log(self.alpha)
 
     def update_iif(self):
         """

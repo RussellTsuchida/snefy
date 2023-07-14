@@ -3,6 +3,7 @@ import torch
 from torch import linalg as LA
 from . import kernels
 from normflows.distributions import GaussianMixture
+import geotorch
 
 class SquaredNN(torch.nn.Module):
     """
@@ -20,7 +21,7 @@ class SquaredNN(torch.nn.Module):
         num_mix_components (int): Number of mixture components if using a
             Gaussian base measure.
         m (int) The number of rows in V, i.e. the width of the readout
-            layer.
+            layer. If m is -1, parameterise by PD matrix V.T V
     Methods:
         integrate - Integrate the squared neural network against the measure.
             Optionally takes an extra_input, which could be the output of
@@ -87,16 +88,22 @@ class SquaredNN(torch.nn.Module):
             raise Exception("Unexpected measure.")
 
     def _initialise_params(self, d, n, m, diagonal_V):
+        self.m = m
         W = np.random.normal(0, 1, (n, d))*2
-        V = np.random.normal(0, 1, (m, n))*np.sqrt(1/(n*m))
         B = np.zeros((n, 1))
 
         self.W = torch.nn.Parameter(torch.from_numpy(W).float())
-        if diagonal_V:
+        if m == -1:
+            V = np.random.normal(0, 1, (n, n))/n
+            self.VTV = torch.nn.Parameter(torch.from_numpy(V.T @ V).float())
+            #geotorch.positive_semidefinite(self, 'VTV', triv='cayley')
+        elif diagonal_V:
             assert (n == m)
+            V = np.random.normal(0, 1, (m, n))*np.sqrt(1/(n*m))
             self.vdiag = torch.nn.Parameter(torch.ones((n)).float())
             self.V = torch.diag(self.vdiag)
         else:
+            V = np.random.normal(0, 1, (m, n))*np.sqrt(1/(n*m))
             self.V = torch.nn.Parameter(torch.from_numpy(V).float())
         self.B = torch.nn.Parameter(torch.from_numpy(B).float())
         self.v0 = torch.nn.Parameter(torch.from_numpy(np.asarray([1.])).float())
@@ -182,7 +189,9 @@ class SquaredNN(torch.nn.Module):
         # Not available until very recent so we do something else instead
         #VKV = (self.V @ self.K @ self.V.T).diagonal(offset=0, dim1=-1, 
         #    dim2=-2).sum(-1).view((-1, 1, 1)) + self.v0**2
-        VKV = torch.sum(self.K * (self.V.T @ self.V), dim=[1,2]) + self.v0**2
+        VTV = self.VTV if self.m == -1 else self.V.T @ self.V
+
+        VKV = torch.sum(self.K * VTV, dim=[1,2]) + self.v0**2
         if log_scale:
             ret = torch.log(VKV)
         else:
@@ -204,8 +213,8 @@ class SquaredNN(torch.nn.Module):
         # Batch matrix multiply of features gives shape M x n x n
         feat = feat.unsqueeze(2)
         Ktilde = torch.bmm(feat, torch.swapaxes(feat, 1, 2))
-
-        squared_net = torch.sum(Ktilde*(self.V.T@self.V), dim=[1,2]) + \
+        VTV = self.VTV if self.m == -1 else self.V.T @ self.V
+        squared_net = torch.sum(Ktilde*VTV, dim=[1,2]) + \
             self.v0**2
 
         if log_scale:
