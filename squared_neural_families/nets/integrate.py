@@ -180,8 +180,9 @@ class SquaredNN(torch.nn.Module):
         # (B, m, m) for B traces of mxm matrices
         #VKV = torch.vmap(torch.trace)(self.V @ self.K @ self.V.T)
         # Not available until very recent so we do something else instead
-        VKV = (self.V @ self.K @ self.V.T).diagonal(offset=0, dim1=-1, 
-            dim2=-2).sum(-1).view((-1, 1, 1)) + self.v0**2
+        #VKV = (self.V @ self.K @ self.V.T).diagonal(offset=0, dim1=-1, 
+        #    dim2=-2).sum(-1).view((-1, 1, 1)) + self.v0**2
+        VKV = torch.sum(self.K * (self.V.T @ self.V)) + self.v0**2
         if log_scale:
             ret = torch.log(VKV)
         else:
