@@ -3,7 +3,6 @@ import torch
 from torch import linalg as LA
 from . import kernels
 from normflows.distributions import GaussianMixture
-import geotorch
 
 class SquaredNN(torch.nn.Module):
     """
@@ -35,6 +34,8 @@ class SquaredNN(torch.nn.Module):
         self.d = d
         self.n = n
         self.a = 1 #TODO: this is the parameter for snake activaitons.
+        self.bound0 = None
+        self.bound1 = None
         self.dim = dim
         self.measure = measure
         self.preprocessing = preprocessing
@@ -67,9 +68,10 @@ class SquaredNN(torch.nn.Module):
             raise Exception("Unexpected activation.")
 
     def _initialise_measure(self, measure, num_mix_components):
-        if (measure == 'gauss'):
-            #self.pdf = lambda x, log_scale: \
-            #        normpdf(x, std=self.s, log_scale=log_scale)
+        if (measure == 'leb'):
+            self.base_measure = None
+            self.pdf = lambda x, log_scale: 0 if log_scale else 1
+        elif (measure == 'gauss'):
             self.base_measure = GaussianMixture(num_mix_components, self.d).float()
             self.pdf = lambda x, log_scale: \
                 self.base_measure.log_prob(x) if log_scale\
@@ -96,12 +98,9 @@ class SquaredNN(torch.nn.Module):
         if m == -1:
             V = np.random.normal(0, 1, (n, n))/n
             self.VTV = torch.nn.Parameter(torch.from_numpy(V.T @ V).float())
-            #geotorch.positive_semidefinite(self, 'VTV', triv='cayley')
         elif diagonal_V:
             assert (n == m)
-            V = np.random.normal(0, 1, (m, n))*np.sqrt(1/(n*m))
-            self.vdiag = torch.nn.Parameter(torch.ones((n)).float())
-            self.V = torch.diag(self.vdiag)
+            self.V = torch.nn.Parameter(torch.diag(torch.ones((n)).float()))
         else:
             V = np.random.normal(0, 1, (m, n))*np.sqrt(1/(n*m))
             self.V = torch.nn.Parameter(torch.from_numpy(V).float())
@@ -142,10 +141,15 @@ class SquaredNN(torch.nn.Module):
             (activation == 'relu') and (preprocessing == 'ident'):
             name = 'arccossphere'
             self.B.requires_grad = False
+        elif (type(domain) is list) and (measure == 'leb') and (activation == 'exp')\
+            and (preprocessing == 'ident'):
+            name = 'loglinear'
+            self.bound0 = domain[0]; self.bound1 = domain[1]
+            self.B.requires_grad = False
         else:
             raise Exception("Unexpected integration parameters.")
         
-        self.kernel = Kernel(name, self.a)
+        self.kernel = Kernel(name, self.a, self.bound0, self.bound1)
 
     def _mathcal_T(self, A, m):
         """
@@ -239,9 +243,11 @@ class Kernel(torch.nn.Module):
     Args:
         name (str): Name of the kernel. 'cos'
     """
-    def __init__(self, name, a):
+    def __init__(self, name, a, bound0=None, bound1=None):
         super().__init__()
         self.a = a
+        self.bound0 = bound0
+        self.bound1 = bound1
         self._init_kernel(name)
 
     def _init_kernel(self, name):
@@ -271,6 +277,10 @@ class Kernel(torch.nn.Module):
         elif name == 'vmf':
             self.kernel = lambda W, B, extra_input: \
                 kernels.vmf_kernel(W, W, B+extra_input, B+extra_input)
+        elif name == 'loglinear':
+            self.kernel = lambda W, B, extra_input: \
+                kernels.log_linear_kernel(W, W, B+extra_input, B+extra_input,
+                        a=self.bound0, b=self.bound1)
         else:
             raise Exception("Unexpected kernel name.")
 

@@ -157,3 +157,28 @@ def vmf_kernel(W1, W2, B1, B2):
     fac[fac!=fac] = 2
 
     return fac*exp_fac/2
+
+def log_linear_kernel(W1, W2, B1, B2, a=0, b=1):
+    """
+    The kernel corresponding with a log-linear model for the intensity
+    /density over a rectangular domain. I.e.
+
+    sigma = exp, t = ident, base measure = Lebesgue, domain = [a,b]**d
+    
+    B1 is (n, M), where M is batch size and n is number of neurons
+    """
+    B1 = B1.T # (M, n) where M is batch size and n is num neurons
+    B2 = B2.T 
+    B1 = B1.view(B1.shape[0], B1.shape[1], 1) # (M, n, 1)
+    B2 = B2.view(B2.shape[0], 1, B2.shape[1]) # (M, 1, n)
+
+    sum_b = B1 + B2 # M x n x n
+    sum_w = torch.unsqueeze(W1.T, 2) + torch.unsqueeze(W2.T, 1) # d x n x n
+    
+    a = a*torch.ones((sum_w.shape[0], 1, 1),  device=B1.device)
+    b = b*torch.ones((sum_w.shape[0], 1, 1),  device=B1.device)
+    
+    all_exp = (torch.exp(b*sum_w) - torch.exp(a*sum_w))/sum_w
+
+    ret = torch.exp(sum_b) * torch.unsqueeze(torch.prod(all_exp, dim=0),0)
+    return ret
