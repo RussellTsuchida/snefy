@@ -206,7 +206,6 @@ class SquaredNN(torch.nn.Module):
 
     def forward(self, y, extra_input=0, log_scale=False):
         y = self._mask(y)
-        """
         net_out = (self.V @ self.act(self.W @ y.T + self.B\
             + extra_input)).T
         squared_net = torch.norm(net_out, dim=1)**2 + self.v0**2
@@ -221,7 +220,7 @@ class SquaredNN(torch.nn.Module):
         VTV = self.VTV if self.m == -1 else self.V.T @ self.V
         squared_net = torch.sum(Ktilde*VTV, dim=[1,2]) + \
             self.v0**2
-
+        """
         if log_scale:
             logpdf = self.pdf(y, log_scale)
             return torch.log(squared_net) + logpdf
