@@ -186,6 +186,7 @@ class SquaredNN(torch.nn.Module):
         for i in range(t_param1.shape[0]):
             self.K = self.K + weights[0,i]*\
                 self.kernel(t_param1[i,:,:], t_param2[i,:,:], extra_input)
+        self.K = self.K.view((-1, self.n, self.n))
         #VKV = self.V.T @ self.K @ self.V+ self.v0**2 ## <- m=1 case transpose
         #torch.vmap vectorises the operation. So we can do a batch trace on
         # (B, m, m) for B traces of mxm matrices

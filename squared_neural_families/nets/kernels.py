@@ -140,7 +140,7 @@ def arc_sine_kernel(W1, W2, B1, B2):
 
     arg = (2*prod12 / torch.sqrt(1 + 2*prod11))/torch.sqrt(1+2*prod22)
 
-    return 2/np.pi * torch.arcsin(arg)
+    return (2/np.pi * torch.arcsin(arg)).view((-1, W1.shape[0]. W2.shape[0]))
 
 def vmf_kernel(W1, W2, B1, B2):
     assert W1.shape[1] == 3 # Currently only support data on sphere
