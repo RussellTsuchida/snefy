@@ -31,6 +31,7 @@ class SquaredNN(torch.nn.Module):
     def __init__(self, domain, measure, activation, preprocessing, d=2, n=100,
         dim = None, num_mix_components=8, m=1, diagonal_V = False):
         super().__init__()
+        self.finetuning = False
         self.d = d
         self.n = n
         self.a = 1 #TODO: this is the parameter for snake activaitons.
@@ -95,21 +96,39 @@ class SquaredNN(torch.nn.Module):
         B = np.zeros((n, 1))
 
         self.W = torch.nn.Parameter(torch.from_numpy(W).float())
-        if m == -1:
-            V = np.random.normal(0, 1, (n, n))/n
-            self.VTV = torch.nn.Parameter(torch.from_numpy(V.T @ V).float())
-        elif diagonal_V:
+
+        if diagonal_V:
             assert (n == m)
             self.V = torch.nn.Parameter(torch.diag(torch.ones((n)).float()))
         else:
-            V = np.random.normal(0, 1, (m, n))*np.sqrt(1/(n*m))
+            if m == -1:
+                size = n
+            else:
+                size = m
+            V = np.random.normal(0, 1, (size, n))*np.sqrt(1/(n*size))
             self.V = torch.nn.Parameter(torch.from_numpy(V).float())
+        if m == -1:
+            self.initialise_vtv()
+
         self.B = torch.nn.Parameter(torch.from_numpy(B).float())
         self.v0 = torch.nn.Parameter(torch.from_numpy(np.asarray([1.])).float())
         # TODO: STD of Gaussian base measure
         #self.s = torch.nn.Parameter(torch.from_numpy(np.asarray([1.])).float())
         #if not ((self.measure == 'gauss') and (self.preprocessing == 'ident')):
         #    self.s.requires_grad = False
+
+    def initialise_vtv(self):
+        self.m = -1
+        self.VTV = torch.nn.Parameter((self.V.T @ self.V).data)
+
+    def finetune_model(self):
+        if not self.finetuning:
+            self.initialise_vtv()
+            self.V.requires_grad = False
+            self.W.requires_grad = False
+            self.B.requires_grad = False
+            self.v0.requires_grad = False
+        self.finetuning = True
 
     def _initialise_kernel(self, domain, measure, activation, preprocessing):
         if (domain == 'Rd') and (measure == 'gauss') and (activation == 'cos')\
@@ -194,7 +213,9 @@ class SquaredNN(torch.nn.Module):
         # Not available until very recent so we do something else instead
         #VKV = (self.V @ self.K @ self.V.T).diagonal(offset=0, dim1=-1, 
         #    dim2=-2).sum(-1).view((-1, 1, 1)) + self.v0**2
-        VTV = self.VTV if self.m == -1 else self.V.T @ self.V
+        VTV = self.VTV + 1e-3*torch.eye(self.VTV.shape[0],
+            device = self.VTV.device)\
+            if self.m == -1 else self.V.T @ self.V
 
         VKV = torch.sum(self.K * VTV, dim=[1,2]) + self.v0**2
         if log_scale:
@@ -206,21 +227,30 @@ class SquaredNN(torch.nn.Module):
 
     def forward(self, y, extra_input=0, log_scale=False):
         y = self._mask(y)
-        net_out = (self.V @ self.act(self.W @ y.T + self.B\
-            + extra_input)).T
-        squared_net = torch.norm(net_out, dim=1)**2 + self.v0**2
-        squared_net = squared_net.view((1, -1))
-        """
-        # If M is batch size, below is shape M x n
-        feat = self.act(self.W @ y.T + self.B + extra_input).T 
+        
+        if self.m == -1:
+            # If M is batch size, below is shape M x n
+            feat = self.act(self.W @ y.T + self.B + extra_input).T 
 
-        # Batch matrix multiply of features gives shape M x n x n
-        feat = feat.unsqueeze(2)
-        Ktilde = torch.bmm(feat, torch.swapaxes(feat, 1, 2))
-        VTV = self.VTV if self.m == -1 else self.V.T @ self.V
-        squared_net = torch.sum(Ktilde*VTV, dim=[1,2]) + \
-            self.v0**2
-        """
+            # Batch matrix multiply of features gives shape M x n x n
+            """
+            feat = feat.unsqueeze(2)
+            Ktilde = torch.bmm(feat, torch.swapaxes(feat, 1, 2))
+            VTV = self.VTV if self.m == -1 else self.V.T @ self.V
+            squared_net = torch.sum(Ktilde*VTV, dim=[1,2]) + \
+                self.v0**2
+            """
+            VTV = self.VTV + 1e-3*torch.eye(self.VTV.shape[0],
+                device = self.VTV.device)\
+                if self.m == -1 else self.V.T @ self.V
+            psiT_VTV = feat @ VTV
+            squared_net = torch.bmm(psiT_VTV.view(-1, 1, self.n),
+                feat.view(-1, self.n, 1)) + self.v0**2
+        else:
+            net_out = (self.V @ self.act(self.W @ y.T + self.B\
+                + extra_input)).T
+            squared_net = torch.norm(net_out, dim=1)**2 + self.v0**2
+            squared_net = squared_net.view((1, -1))
         if log_scale:
             logpdf = self.pdf(y, log_scale)
             return torch.log(squared_net) + logpdf
@@ -228,7 +258,11 @@ class SquaredNN(torch.nn.Module):
         pdf = self.pdf(y, log_scale)
         return squared_net*pdf
 
-    def _mask(self, y):
+    def l2_lastlayer(self):
+        VTV = self.VTV if self.m == -1 else self.V.T @ self.V
+        return torch.norm(VTV)
+
+    def _mask(self, y, extra_input = 0):
         if not (self.dim is None):
             if not (len(y.shape) == 1):
                 if not (y.shape[1] == 1):
