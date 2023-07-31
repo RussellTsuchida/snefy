@@ -129,7 +129,7 @@ class SquaredNN(torch.nn.Module):
         if not (self.temporal is None):
             Wt = np.random.normal(0, 1, (n, 1))*2
             self.Wt = torch.nn.Parameter(torch.from_numpy(Wt).float())
-            Bt = np.zeros((n, 1))
+            Bt = np.random.normal(0, 1, (n, 1))
             self.Bt = torch.nn.Parameter(torch.from_numpy(Bt).float())
 
     def initialise_vtv(self):
