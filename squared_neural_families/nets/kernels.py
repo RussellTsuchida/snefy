@@ -131,7 +131,8 @@ def arc_cosine_kernel_sphere(W1, W2, B1, B2):
     # Integrate over uniform distribution on sphere instead of Gaussian
     assert W1.shape[1] == 3
     moment = 3
-    return arc_cosine_kernel(W1, W2, B1, B2)/moment
+    ret = arc_cosine_kernel(W1, W2, B1, B2)/moment
+    return ret
 
 def arc_sine_kernel(W1, W2, B1, B2):
     prod12 = W1 @ W2.T
@@ -181,4 +182,39 @@ def log_linear_kernel(W1, W2, B1, B2, a=0, b=1):
     all_exp = (torch.exp(b*sum_w) - torch.exp(a*sum_w))/sum_w
 
     ret = torch.exp(sum_b) * torch.unsqueeze(torch.prod(all_exp, dim=0),0)
+    return ret
+
+def relu1d_kernel(W1, W2, B1, B2, a=0, b=1):
+    """
+    Lebesgue base measure on an interval (a, b), identity sufficient stat,
+    ReLU activations. In this 1D example, can use nonzero bias.
+    """
+    assert W1.shape[1] == 1
+
+    W1 = torch.tile(W1, [1, W2.shape[0]])
+    W2 = torch.tile(W2.T, [W1.shape[0], 1])
+    B1 = torch.tile(B1, [1, B2.shape[0]])
+    B2 = torch.tile(B2.T, [B1.shape[0], 1])
+
+    antideriv = lambda x: W1 * W2/3 * x**3 + (W1*B2 + W2*B1)/2*x**2 + B1*B2*x
+
+    min2 = torch.minimum(b*torch.ones_like(W1, device=W1.device), -B1/W1)
+    min3 = torch.minimum(b*torch.ones_like(W2, device=W2.device), -B2/W2)
+    min4 = torch.minimum(min3, -B1/W1)
+
+    upper = (W1 > 0) * (W2 > 0) * b + \
+            (W1 < 0) * (W2 > 0) * min2 + \
+            (W1 > 0) * (W2 < 0) * min3 + \
+            (W1 < 0) * (W2 < 0) * min4
+
+    max3 = torch.maximum(a*torch.ones_like(W1, device=W1.device), -B1/W1)
+    max2 = torch.maximum(a*torch.ones_like(W2, device=W2.device), -B2/W2)
+    max1 = torch.maximum(max2, -B1/W1)
+
+    lower = (W1 > 0) * (W2 > 0) * max1 + \
+            (W1 < 0) * (W2 > 0) * max2 + \
+            (W1 > 0) * (W2 < 0) * max3 + \
+            (W1 < 0) * (W2 < 0) * a
+
+    ret = (antideriv(upper) - antideriv(lower))*(upper > lower)
     return ret

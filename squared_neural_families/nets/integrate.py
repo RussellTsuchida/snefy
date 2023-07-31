@@ -19,8 +19,15 @@ class SquaredNN(torch.nn.Module):
             If not None, then d must be 1
         num_mix_components (int): Number of mixture components if using a
             Gaussian base measure.
-        m (int) The number of rows in V, i.e. the width of the readout
+        m (int): The number of rows in V, i.e. the width of the readout
             layer. If m is -1, parameterise by PD matrix V.T V
+        temporal (None or [float, float]): 
+            In addition to the d dimensions for the variable
+            to be modelled, include an extra dimension for time.
+            Always use ReLU activations, Lebesgue base measure on
+            interval for this extra dimension. If None, don't include temporal
+            dimension. If a list of two floats, use a temporal dimension on the
+            given interval.
     Methods:
         integrate - Integrate the squared neural network against the measure.
             Optionally takes an extra_input, which could be the output of
@@ -29,7 +36,8 @@ class SquaredNN(torch.nn.Module):
             by the measure.
     """
     def __init__(self, domain, measure, activation, preprocessing, d=2, n=100,
-        dim = None, num_mix_components=8, m=1, diagonal_V = False):
+        dim = None, num_mix_components=8, m=1, diagonal_V = False, 
+        temporal = None):
         super().__init__()
         self.finetuning = False
         self.d = d
@@ -41,7 +49,7 @@ class SquaredNN(torch.nn.Module):
         self.measure = measure
         self.preprocessing = preprocessing
 
-        self._initialise_params(d, n, m, diagonal_V)
+        self._initialise_params(d, n, m, diagonal_V, temporal)
         self._initialise_measure(measure,num_mix_components)
         self._initialise_activation(activation)
         self._initialise_kernel(domain, measure, activation, preprocessing)
@@ -90,7 +98,8 @@ class SquaredNN(torch.nn.Module):
         else:
             raise Exception("Unexpected measure.")
 
-    def _initialise_params(self, d, n, m, diagonal_V):
+    def _initialise_params(self, d, n, m, diagonal_V, temporal):
+        self.temporal = temporal 
         self.m = m
         W = np.random.normal(0, 1, (n, d))*2
         B = np.zeros((n, 1))
@@ -117,6 +126,12 @@ class SquaredNN(torch.nn.Module):
         #if not ((self.measure == 'gauss') and (self.preprocessing == 'ident')):
         #    self.s.requires_grad = False
 
+        if not (self.temporal is None):
+            Wt = np.random.normal(0, 1, (n, 1))*2
+            self.Wt = torch.nn.Parameter(torch.from_numpy(Wt).float())
+            Bt = np.zeros((n, 1))
+            self.Bt = torch.nn.Parameter(torch.from_numpy(Bt).float())
+
     def initialise_vtv(self):
         self.m = -1
         self.VTV = torch.nn.Parameter((self.V.T @ self.V).data)
@@ -128,6 +143,8 @@ class SquaredNN(torch.nn.Module):
             self.W.requires_grad = False
             self.B.requires_grad = False
             self.v0.requires_grad = False
+            self.Wt.requires_grad = False
+            self.Bt.requires_grad = False
         self.finetuning = True
 
     def _initialise_kernel(self, domain, measure, activation, preprocessing):
@@ -169,6 +186,9 @@ class SquaredNN(torch.nn.Module):
             raise Exception("Unexpected integration parameters.")
         
         self.kernel = Kernel(name, self.a, self.bound0, self.bound1)
+        if not (self.temporal is None):
+            self.kernelt = Kernel('relu1d', self.a, self.temporal[0], 
+                self.temporal[1])
 
     def _mathcal_T(self, A, m):
         """
@@ -206,6 +226,10 @@ class SquaredNN(torch.nn.Module):
             self.K = self.K + weights[0,i]*\
                 self.kernel(t_param1[i,:,:], t_param2[i,:,:], extra_input)
         self.K = self.K.view((-1, self.n, self.n))
+
+        # Multiply by temporal kernel if required
+        if not (self.temporal is None):
+            self.K = self.K * self.kernelt(self.Wt, self.Bt, extra_input)
         #VKV = self.V.T @ self.K @ self.V+ self.v0**2 ## <- m=1 case transpose
         #torch.vmap vectorises the operation. So we can do a batch trace on
         # (B, m, m) for B traces of mxm matrices
@@ -227,11 +251,19 @@ class SquaredNN(torch.nn.Module):
 
     def forward(self, y, extra_input=0, log_scale=False):
         y = self._mask(y)
+        if not (self.temporal is None):
+            t = y[:,-1].view((-1,1))
+            y = y[:,:-1]
         
-        if self.m == -1:
-            # If M is batch size, below is shape M x n
-            feat = self.act(self.W @ y.T + self.B + extra_input).T 
+        # If M is batch size, below is shape M x n
+        feat = self.act(self.W @ y.T + self.B + extra_input).T 
 
+        #Multiply by temporal features if required
+        if not (self.temporal is None):
+            feat = feat * torch.nn.functional.relu(self.Wt @ t.T + self.Bt\
+                + extra_input).T
+
+        if self.m == -1:
             # Batch matrix multiply of features gives shape M x n x n
             """
             feat = feat.unsqueeze(2)
@@ -247,8 +279,7 @@ class SquaredNN(torch.nn.Module):
             squared_net = torch.bmm(psiT_VTV.view(-1, 1, self.n),
                 feat.view(-1, self.n, 1)) + self.v0**2
         else:
-            net_out = (self.V @ self.act(self.W @ y.T + self.B\
-                + extra_input)).T
+            net_out = (self.V @ feat.T).T
             squared_net = torch.norm(net_out, dim=1)**2 + self.v0**2
             squared_net = squared_net.view((1, -1))
         if log_scale:
@@ -315,6 +346,10 @@ class Kernel(torch.nn.Module):
             self.kernel = lambda W, B, extra_input: \
                 kernels.log_linear_kernel(W, W, B+extra_input, B+extra_input,
                         a=self.bound0, b=self.bound1)
+        elif name == 'relu1d':
+            self.kernel = lambda W, B, extra_input:\
+                kernels.relu1d_kernel(W, W, B+extra_input, B+extra_input,
+                    a=self.bound0, b=self.bound1)
         else:
             raise Exception("Unexpected kernel name.")
 
