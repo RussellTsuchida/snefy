@@ -93,19 +93,6 @@ class ConditionalDensity(BaseDistribution):
         self.log_part = torch.squeeze(\
                 self.squared_nn.integrate(extra_input=feat, log_scale=True))
 
-    """
-    def freeze_features(self, unfreeze=False, x=None):
-        self.frozen = not unfreeze
-        self.squared_nn.W.requires_grad = unfreeze
-        self.squared_nn.B.requires_grad = unfreeze
-        for param in self.squared_nn.base_measure.parameters():
-            param.requires_grad = unfreeze
-        
-        # Compute partition function for frozen conditioning input
-        feat = self.feature_net(x).T
-        self.squared_nn.integrate(extra_input=feat, log_scale=True)
-    """
-
 class Density(ConditionalDensity):
     """
     Same as conditional density but without conditioning on any input.

@@ -21,13 +21,13 @@ class SquaredNN(torch.nn.Module):
             Gaussian base measure.
         m (int): The number of rows in V, i.e. the width of the readout
             layer. If m is -1, parameterise by PD matrix V.T V
-        temporal (None or [float, float]): 
+        temporal (None or list of list of floats): 
             In addition to the d dimensions for the variable
             to be modelled, include an extra dimension for time.
             Always use ReLU activations, Lebesgue base measure on
             interval for this extra dimension. If None, don't include temporal
-            dimension. If a list of two floats, use a temporal dimension on the
-            given interval.
+            dimension. If a list of list of two floats, use a temporal dimension
+            and compute the integral over the union of the integrals.
     Methods:
         integrate - Integrate the squared neural network against the measure.
             Optionally takes an extra_input, which could be the output of
@@ -187,8 +187,7 @@ class SquaredNN(torch.nn.Module):
         
         self.kernel = Kernel(name, self.a, self.bound0, self.bound1)
         if not (self.temporal is None):
-            self.kernelt = Kernel('relu1d', self.a, self.temporal[0], 
-                self.temporal[1])
+            self.kernelt = Kernel('relu1d', self.temporal)
 
     def _mathcal_T(self, A, m):
         """
@@ -349,7 +348,7 @@ class Kernel(torch.nn.Module):
         elif name == 'relu1d':
             self.kernel = lambda W, B, extra_input:\
                 kernels.relu1d_kernel(W, W, B+extra_input, B+extra_input,
-                    a=self.bound0, b=self.bound1)
+                    a=self.a)
         else:
             raise Exception("Unexpected kernel name.")
 

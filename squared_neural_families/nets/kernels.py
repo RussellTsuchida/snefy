@@ -184,7 +184,7 @@ def log_linear_kernel(W1, W2, B1, B2, a=0, b=1):
     ret = torch.exp(sum_b) * torch.unsqueeze(torch.prod(all_exp, dim=0),0)
     return ret
 
-def relu1d_kernel(W1, W2, B1, B2, a=0, b=1):
+def relu1d_kernel_(W1, W2, B1, B2, a=0, b=1):
     """
     Lebesgue base measure on an interval (a, b), identity sufficient stat,
     ReLU activations. In this 1D example, can use nonzero bias.
@@ -218,3 +218,10 @@ def relu1d_kernel(W1, W2, B1, B2, a=0, b=1):
 
     ret = (antideriv(upper) - antideriv(lower))*(upper > lower)
     return ret
+
+def relu1d_kernel(W1, W2, B1, B2, a):
+    s = 0
+    for lower_upper in a:
+        s = s + relu1d_kernel_(W1, W2, B1, B2, lower_upper[0], lower_upper[1])
+    return s
+
