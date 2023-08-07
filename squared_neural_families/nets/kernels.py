@@ -2,14 +2,16 @@ import torch
 import numpy as np
 
 def cos_kernel(W1, W2, B1, B2):
-    dist = torch.cdist(torch.unsqueeze(W1, 0), torch.unsqueeze(W2, 0)) 
-    sum_ = torch.cdist(torch.unsqueeze(W1, 0), -torch.unsqueeze(W2, 0)) 
+    dist = torch.cdist(torch.unsqueeze(W1, 0).contiguous(), 
+        torch.unsqueeze(W2, 0).contiguous()) 
+    sum_ = torch.cdist(torch.unsqueeze(W1, 0).contiguous(), 
+        -torch.unsqueeze(W2, 0).contiguous()) 
     
     b1 = torch.unsqueeze(B1.T, 2)
     b2 = torch.unsqueeze(B2.T, 2)
 
-    distb = torch.cdist(b1, b2, p=1)
-    sumb = torch.cdist(b1, -b2, p=1)
+    distb = torch.cdist(b1.contiguous(), b2.contiguous(), p=1)
+    sumb = torch.cdist(b1.contiguous(), -b2.contiguous(), p=1)
 
     ret = 0.5*(torch.exp(-0.5*dist**2)*torch.cos(distb) + \
             torch.exp(-0.5*sum_**2)*torch.cos(sumb))
@@ -99,14 +101,16 @@ def snake_kernel(W1, W2, B1, B2, a=0.5):
 
 
 def sin_kernel(W1, W2, B1, B2):
-    dist = torch.cdist(torch.unsqueeze(W1, 0), torch.unsqueeze(W2, 0)) 
-    sum_ = torch.cdist(torch.unsqueeze(W1, 0), -torch.unsqueeze(W2, 0)) 
+    dist = torch.cdist(torch.unsqueeze(W1, 0).contiguous(), 
+        torch.unsqueeze(W2, 0).contiguous()) 
+    sum_ = torch.cdist(torch.unsqueeze(W1, 0).contiguous(), 
+        -torch.unsqueeze(W2, 0).contiguous()) 
     
     b1 = torch.unsqueeze(B1.T, 2)
     b2 = torch.unsqueeze(B2.T, 2)
 
-    distb = torch.cdist(b1, b2, p=1)
-    sumb = torch.cdist(b1, -b2, p=1)
+    distb = torch.cdist(b1.contiguous(), b2.contiguous(), p=1)
+    sumb = torch.cdist(b1.contiguous(), -b2.contiguous(), p=1)
 
     ret = 0.5*(torch.exp(-0.5*dist**2)*torch.cos(distb) - \
             torch.exp(-0.5*sum_**2)*torch.cos(sumb))
@@ -146,12 +150,13 @@ def arc_sine_kernel(W1, W2, B1, B2):
 def vmf_kernel(W1, W2, B1, B2):
     assert W1.shape[1] == 3 # Currently only support data on sphere
 
-    sum_ = torch.cdist(torch.unsqueeze(W1, 0), -torch.unsqueeze(W2, 0)) 
+    sum_ = torch.cdist(torch.unsqueeze(W1, 0).contiguous(), 
+        -torch.unsqueeze(W2, 0).contiguous()) 
     
     b1 = torch.unsqueeze(B1.T, 2)
     b2 = torch.unsqueeze(B2.T, 2)
 
-    b_sum = torch.cdist(b1, -b2, p=1)
+    b_sum = torch.cdist(b1.contiguous(), -b2.contiguous(), p=1)
 
     exp_fac = torch.squeeze(torch.exp(b_sum), dim=len(b_sum.shape)-1)
     fac = (torch.exp(sum_) - torch.exp(-sum_))/sum_
