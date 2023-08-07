@@ -206,26 +206,7 @@ class SquaredNN(torch.nn.Module):
         return (self.W @ Amat, self.B + self.W @ m_)
 
     def integrate(self, extra_input=0, log_scale=False):
-        if self.measure == 'gauss':
-            t_param1, t_param2 = \
-                self._mathcal_T(torch.exp(self.base_measure.log_scale), 
-                self.base_measure.loc)
-        else:
-            t_param1 = self.W.view((1, self.W.shape[0], self.W.shape[1]))
-            t_param2 = self.B.view((1, self.B.shape[0], 1))
-
-        # Iterate over the number of mixture components. 
-        # Probably a better way to do this. #TODO
-        self.K = 0 
-        if self.measure == 'gauss':
-            weights = torch.softmax(self.base_measure.weight_scores, 1)
-        else:
-            weights = np.asarray([[1]])
-        for i in range(t_param1.shape[0]):
-            self.K = self.K + weights[0,i]*\
-                self.kernel(t_param1[i,:,:], t_param2[i,:,:], extra_input)
-        self.K = self.K.view((-1, self.n, self.n))
-
+        self._evaluate_kernel(extra_input)
         # Multiply by temporal kernel if required
         if not (self.temporal is None):
             self.K = self.K * self.kernelt(self.Wt, self.Bt, extra_input)
@@ -247,6 +228,41 @@ class SquaredNN(torch.nn.Module):
             ret = VKV
 
         return ret
+
+    def _evaluate_kernel(self, extra_input=0, keep_dims = None):
+        # Preprocess Gaussian mixture model parameters via affine transform
+        if self.measure == 'gauss':
+            t_param1, t_param2 = \
+                self._mathcal_T(torch.exp(self.base_measure.log_scale), 
+                self.base_measure.loc)
+        else:
+            t_param1 = self.W.view((1, self.W.shape[0], self.W.shape[1]))
+            t_param2 = self.B.view((1, self.B.shape[0], 1))
+
+        # Only integrate over the dimensions we don't want to keep
+        idx = range(0, self.d)
+        if not (keep_dims is None):
+            [idx.remove(i) for i in keep_dims]
+            t_param1 = t_param1[:,:,idx]
+            t_param2 = t_param2 + t_param1[:,:,keep_dims] @ extra_input
+
+        # Iterate over the number of mixture components. 
+        self.K = 0 
+        if self.measure == 'gauss':
+            weights = torch.softmax(self.base_measure.weight_scores, 1)
+        else:
+            weights = np.asarray([[1]])
+
+        # Iterate over mixture components
+        for i in range(t_param1.shape[0]):
+            self.K = self.K + weights[0,i]*\
+                self.kernel(t_param1[i,:,:], t_param2[i,:,:], extra_input)
+        self.K = self.K.view((-1, self.n, self.n))
+
+        # Multiply by temporal kernel if required
+        if not (self.temporal is None):
+            self.K = self.K * self.kernelt(self.Wt, self.Bt, extra_input)
+
 
     def forward(self, y, extra_input=0, log_scale=False):
         y = self._mask(y)
