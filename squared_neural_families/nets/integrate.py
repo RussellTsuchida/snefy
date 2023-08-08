@@ -248,9 +248,9 @@ class SquaredNN(torch.nn.Module):
 
     def integrate(self, extra_input=0, log_scale=False):
         self.K = self._evaluate_kernel(extra_input, keep_dims=[])
-        # Multiply by temporal kernel if required
-        if not (self.temporal is None):
-            self.K = self.K * self.kernelt(self.Wt, self.Bt, extra_input)
+        # Multiply by temporal kernel if required [ALREADY DONE IN EVALUATE]
+        #if not (self.temporal is None):
+        #    self.K = self.K * self.kernelt(self.Wt, self.Bt, extra_input)
         #VKV = self.V.T @ self.K @ self.V+ self.v0**2 ## <- m=1 case transpose
         #torch.vmap vectorises the operation. So we can do a batch trace on
         # (B, m, m) for B traces of mxm matrices
