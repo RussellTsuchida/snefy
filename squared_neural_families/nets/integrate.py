@@ -287,12 +287,13 @@ class SquaredNN(torch.nn.Module):
         if not (keep_dims is None):
             idx = list(range(0, self.d))
             [idx.remove(i) for i in keep_dims]
-            if not (extra_input.nelement() == 1):
-                extra_input = \
-                    self.W.view((1, self.W.shape[0], self.W.shape[1]))\
-                    [:,:,keep_dims].contiguous() @\
-                    extra_input.T.contiguous()
-                extra_input = torch.squeeze(extra_input).contiguous()
+            if not (extra_input == 0):
+                if not (extra_input.nelement() == 1):
+                    extra_input = \
+                        self.W.view((1, self.W.shape[0], self.W.shape[1]))\
+                        [:,:,keep_dims].contiguous() @\
+                        extra_input.T.contiguous()
+                    extra_input = torch.squeeze(extra_input).contiguous()
 
             """
             extra_input = t_param1[:,:,keep_dims].contiguous() @\
