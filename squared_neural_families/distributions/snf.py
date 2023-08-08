@@ -74,13 +74,32 @@ class ConditionalDensity(BaseDistribution):
         samples = self.sample(num_samples, M, x)
         return self.samples, logp
 
-    def log_prob(self, y, x):
+    def log_prob(self, y, x, keep_dims=None):
         """
         Log probability of y given x (as a batch)
         """
         feat = self.feature_net(x).T
-        log_num = torch.squeeze(self.squared_nn(y, extra_input=feat,
-            log_scale=True))
+
+        # Joint distribution (keep_dims=None) or marginal distribution
+        if keep_dims is None:
+            log_num = torch.squeeze(self.squared_nn(y, extra_input=feat,
+                log_scale=True))
+        else:
+            VTV = self.squared_nn.VTV + 1e-3*torch.eye(\
+                self.squared_nn.VTV.shape[0], 
+                device = self.squared_nn.VTV.device)\
+                if self.squared_nn.m == -1 else \
+                self.squared_nn.V.T @ self.squared_nn.V
+
+            C = self.squared_nn._evaluate_kernel(extra_input=y,
+                keep_dims=keep_dims)
+
+            # NOTE: HERE WE ASSUME THE BASE PDF IS FACTORISED INDEPENDENT
+            # And also v0 == 0
+            logpdf = self.squared_nn.marginal_base_pdf\
+                (keep_dims, y, log_scale=True)
+            log_num = torch.log(torch.sum(VTV * C, dim=[1,2]) + \
+                self.squared_nn.v0**2) + logpdf
         # Only update the partition function during training. 
         # First evaluation after model.eval() requires manual call to update_partfun
         if self.training:
@@ -114,8 +133,8 @@ class Density(ConditionalDensity):
     def forward(self, num_samples=1, M=1000, x=None):
         return super().forward(num_samples, M, x=x)
 
-    def log_prob(self, y, x=None):
-        return super().log_prob(y, x=x)
+    def log_prob(self, y, x=None, keep_dims=None):
+        return super().log_prob(y, x=x, keep_dims=keep_dims)
 
     def update_partfun(self, x=None):
         return super().update_partfun(x=x)

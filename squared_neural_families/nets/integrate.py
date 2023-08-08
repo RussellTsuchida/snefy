@@ -48,6 +48,7 @@ class SquaredNN(torch.nn.Module):
         self.dim = dim
         self.measure = measure
         self.preprocessing = preprocessing
+        self.num_mix_components = num_mix_components
 
         self._initialise_params(d, n, m, diagonal_V, temporal)
         self._initialise_measure(measure,num_mix_components)
@@ -97,6 +98,36 @@ class SquaredNN(torch.nn.Module):
             self.pdf = lambda x, log_scale: self.pdf_(x, log_scale).to(x.device)
         else:
             raise Exception("Unexpected measure.")
+
+    def marginal_base_pdf(self, keep_dims, x, log_scale=True):
+        """
+        Evaluate the marginal base density pdf over keep_dims at x.
+        Assume that the base pdf factors as a diagonal Gaussian.
+        """
+        if keep_dims is None:
+            return self.pdf(x, log_scale)
+
+        assert self.measure=='gauss'
+        weights = torch.softmax(self.base_measure.weight_scores, 1)
+        assert weights.shape[0] == weights.shape[1]
+        assert weights.shape[0] == 1
+
+        log_std = self.base_measure.log_scale[:,:,keep_dims]
+        std = torch.exp(log_std)
+        means = self.base_measure.loc[:,:,keep_dims]
+
+        ret = 0
+        k = len(keep_dims)
+        for i in range(weights.shape[1]):
+            # Note: Weights already included in kernel calc
+            ret = ret  - k/2*np.log(2*np.pi) - \
+                0.5*torch.log(torch.prod(std[0,i]**2)) - \
+                0.5*torch.sum((x - means[0,i])**2/std[0,i]**2, dim=1)
+        
+        if not log_scale:
+            ret = torch.exp(ret)
+
+        return ret
 
     def _initialise_params(self, d, n, m, diagonal_V, temporal):
         self.temporal = temporal 
@@ -189,24 +220,34 @@ class SquaredNN(torch.nn.Module):
         if not (self.temporal is None):
             self.kernelt = Kernel('relu1d', self.temporal)
 
-    def _mathcal_T(self, A, m):
+    def _mathcal_T(self, A, m, keep_dims = []):
         """
         Return the result \mathcal{T} \Theta
         """
+        assert not (keep_dims is None)
+        idx = list(range(0, self.d))
+        [idx.remove(i) for i in keep_dims]
+        A_ = A[:,:,idx]
+        m_ = m[:,:,idx]
+        d = len(idx)
+
         #(num_mix_components x d x d)
-        Amat = torch.diag_embed(torch.squeeze(A, dim=0))\
-            .view(A.shape[1],self.d,self.d)
+        Amat = torch.diag_embed(torch.squeeze(A_, dim=0))\
+            .view(A_.shape[1],d, d)
         
         # (num_mix_components x n x 1)
-        m_ = torch.swapaxes(m, 0, 2)
+        m_ = torch.swapaxes(m_, 0, 2)
         m_ = torch.swapaxes(m_, 0, 1)
 
         # (num_mix_components, n, d)
         # (num_mix_components, n, 1)
-        return (self.W @ Amat, self.B + self.W @ m_)
+        ret1 = self.W[:,idx] @ Amat
+        ret2 = self.B + self.W[:,idx] @ m_
+
+        return (ret1, ret2)
 
     def integrate(self, extra_input=0, log_scale=False):
-        self._evaluate_kernel(extra_input)
+        self.K = self._evaluate_kernel(extra_input, keep_dims=[])
         # Multiply by temporal kernel if required
         if not (self.temporal is None):
             self.K = self.K * self.kernelt(self.Wt, self.Bt, extra_input)
@@ -229,25 +270,38 @@ class SquaredNN(torch.nn.Module):
 
         return ret
 
-    def _evaluate_kernel(self, extra_input=0, keep_dims = None):
+    def _evaluate_kernel(self, extra_input=0, keep_dims = []):
         # Preprocess Gaussian mixture model parameters via affine transform
         if self.measure == 'gauss':
             t_param1, t_param2 = \
                 self._mathcal_T(torch.exp(self.base_measure.log_scale), 
-                self.base_measure.loc)
+                self.base_measure.loc, keep_dims)
+            t_param1 = t_param1.view((self.num_mix_components, self.n, -1))
+            t_param2 = t_param2.view(\
+                (self.num_mix_components, self.B.shape[0], 1))
         else:
             t_param1 = self.W.view((1, self.W.shape[0], self.W.shape[1]))
             t_param2 = self.B.view((1, self.B.shape[0], 1))
 
         # Only integrate over the dimensions we don't want to keep
-        idx = range(0, self.d)
         if not (keep_dims is None):
+            idx = list(range(0, self.d))
             [idx.remove(i) for i in keep_dims]
-            t_param1 = t_param1[:,:,idx]
-            t_param2 = t_param2 + t_param1[:,:,keep_dims] @ extra_input
+            if not (extra_input.nelement() == 1):
+                extra_input = \
+                    self.W.view((1, self.W.shape[0], self.W.shape[1]))\
+                    [:,:,keep_dims].contiguous() @\
+                    extra_input.T.contiguous()
+                extra_input = torch.squeeze(extra_input).contiguous()
 
+            """
+            extra_input = t_param1[:,:,keep_dims].contiguous() @\
+                extra_input.T.contiguous()
+            extra_input = torch.squeeze(extra_input).contiguous()
+            t_param1 = t_param1[:,:,idx].contiguous()
+            """
         # Iterate over the number of mixture components. 
-        self.K = 0 
+        K = 0 
         if self.measure == 'gauss':
             weights = torch.softmax(self.base_measure.weight_scores, 1)
         else:
@@ -255,14 +309,16 @@ class SquaredNN(torch.nn.Module):
 
         # Iterate over mixture components
         for i in range(t_param1.shape[0]):
-            self.K = self.K + weights[0,i]*\
-                self.kernel(t_param1[i,:,:], t_param2[i,:,:], extra_input)
-        self.K = self.K.view((-1, self.n, self.n))
+            K = K + weights[0,i]*\
+                self.kernel(t_param1[i,:,:].contiguous(), 
+                t_param2[i,:,:].contiguous(), extra_input)
+        K = K.view((-1, self.n, self.n))
 
         # Multiply by temporal kernel if required
         if not (self.temporal is None):
-            self.K = self.K * self.kernelt(self.Wt, self.Bt, extra_input)
-
+            K = K * self.kernelt(self.Wt.contiguous(), self.Bt.contiguous(), 
+                extra_input)
+        return K
 
     def forward(self, y, extra_input=0, log_scale=False):
         y = self._mask(y)
