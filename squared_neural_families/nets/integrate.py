@@ -286,7 +286,7 @@ class SquaredNN(torch.nn.Module):
             t_param2 = self.B.view((1, self.B.shape[0], 1))
 
         # Only integrate over the dimensions we don't want to keep
-        if not (keep_dims is None):
+        if not ((keep_dims is None) or (keep_dims == [])):
             idx = list(range(0, self.d))
             [idx.remove(i) for i in keep_dims]
             #if not (extra_input == 0):
