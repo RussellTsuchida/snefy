@@ -121,7 +121,7 @@ class SquaredNN(torch.nn.Module):
         for i in range(weights.shape[1]):
             # Note: Weights already included in kernel calc
             ret = ret  - k/2*np.log(2*np.pi) - \
-                0.5*torch.log(torch.prod(std[0,i]**2)) - \
+                torch.sum(torch.log(std[0,i])) - \
                 0.5*torch.sum((x - means[0,i])**2/std[0,i]**2, dim=1)
         
         if not log_scale:
@@ -289,13 +289,13 @@ class SquaredNN(torch.nn.Module):
         if not (keep_dims is None):
             idx = list(range(0, self.d))
             [idx.remove(i) for i in keep_dims]
-            if not (extra_input == 0):
-                if not (extra_input.nelement() == 1):
-                    extra_input = \
-                        self.W.view((1, self.W.shape[0], self.W.shape[1]))\
-                        [:,:,keep_dims].contiguous() @\
-                        extra_input.T.contiguous()
-                    extra_input = torch.squeeze(extra_input).contiguous()
+            #if not (extra_input == 0):
+            if not (extra_input.nelement() == 1):
+                extra_input = \
+                    self.W.view((1, self.W.shape[0], self.W.shape[1]))\
+                    [:,:,keep_dims].contiguous() @\
+                    extra_input.T.contiguous()
+                extra_input = torch.squeeze(extra_input).contiguous()
 
             """
             extra_input = t_param1[:,:,keep_dims].contiguous() @\
